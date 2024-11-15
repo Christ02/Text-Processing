@@ -1,0 +1,122 @@
+---
+title: "Laboratorio#7"
+author: "Christian Barrios"
+date: "2024-11-15"
+output: github_document
+---
+
+```{r setup, include=TRUE}
+library(readr)  
+library(dplyr)  
+library(stringr)  
+library(lubridate)  
+library(stopwords)  
+library(wordcloud) 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+```
+
+```{r}
+metadata <- read_csv("C:/Users/barri/Documents/UFM/2024/Segundo Semestre/Data Wrangling/Laboratorio7-TextProcessing/Health_and_Personal_Care_metadata.csv")
+reviews <- read_csv("C:/Users/barri/Documents/UFM/2024/Segundo Semestre/Data Wrangling/Laboratorio7-TextProcessing/Health_and_Personal_Care.csv")
+
+```
+
+## 1) Identificar productos con palabras clave en reseñas
+
+```{r}
+keywords <- c("love", "recommend", "enjoy")
+pattern <- paste(keywords, collapse = '|')
+
+# Filtrar productos con reseñas que contengan las palabras clave
+products_with_keywords <- reviews %>%
+  filter(str_detect(text, pattern)) %>%
+  select(product_id) %>%
+  distinct() %>%
+  summarise(product_count = n())
+
+products_with_keywords
+
+```
+
+
+## 2) Tiendas principales que venden los productos identificados
+
+```{r}
+# Relacionar productos con las tiendas
+store_summary <- reviews %>%
+  filter(str_detect(text, pattern)) %>%
+  distinct(product_id, parent_id) %>%
+  inner_join(metadata, by = "parent_id") %>%
+  filter(!is.na(store)) %>%
+  group_by(store) %>%
+  summarise(total_products = n()) %>%
+  arrange(desc(total_products)) %>%
+  slice_head(n = 5)
+
+store_summary
+```
+
+## 3) Wordcloud de palabras positivas en reseñas
+
+```{r}
+# Crear lista de palabras filtradas
+positive_reviews <- reviews %>%
+  filter(str_detect(text, pattern)) %>%
+  pull(text)
+
+stop_words <- c(stopwords("en"), stopwords("es"))
+words <- str_split(positive_reviews[1:100], boundary("word")) %>% unlist()
+
+filtered_words <- tibble(word = words) %>%
+  filter(!word %in% stop_words) %>%
+  count(word, sort = TRUE)
+
+wordcloud(filtered_words$word, filtered_words$n)
+```
+
+## 4) Wordcloud para reseñas de tiendas principales
+
+```{r}
+# Seleccionar IDs de las tiendas principales
+selected_stores <- store_summary$store
+parent_ids <- metadata %>%
+  filter(store %in% selected_stores) %>%
+  pull(parent_id)
+
+# Filtrar reseñas de estas tiendas
+store_reviews <- reviews %>%
+  filter(parent_id %in% parent_ids) %>%
+  pull(text)
+
+store_words <- str_split(store_reviews[1:100], boundary("word")) %>% unlist()
+
+filtered_store_words <- tibble(word = store_words) %>%
+  filter(!word %in% stop_words) %>%
+  count(word, sort = TRUE)
+
+wordcloud(filtered_store_words$word, filtered_store_words$n)
+
+```
+
+## 5) Las 25 palabras más frecuentes
+
+```{r}
+# Extraer todas las palabras de las reseñas
+all_words <- reviews %>%
+  pull(text) %>%
+  str_split(boundary("word")) %>%
+  unlist()
+
+# Contar frecuencias
+frequencies <- tibble(word = all_words) %>%
+  filter(!word %in% stop_words) %>%
+  count(word, sort = TRUE)
+
+top_25 <- frequencies %>%
+  slice_head(n = 25)
+
+top_25
+```
+
+
